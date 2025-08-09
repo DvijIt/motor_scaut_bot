@@ -35,9 +35,6 @@ class CarScoutBot:
         
         self.application = ApplicationBuilder().token(self.token).build()
         self._setup_handlers()
-        
-        # Set up menu button and commands on startup
-        self.application.job_queue.run_once(self._setup_menu_button, 1)
     
     def _setup_handlers(self):
         """Set up all bot command and message handlers"""
@@ -61,30 +58,7 @@ class CarScoutBot:
             MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message)
         )
     
-    async def _setup_menu_button(self, context):
-        """Set up the persistent menu button with bot commands"""
-        try:
-            # Define the commands that will appear in the menu
-            commands = [
-                BotCommand("start", "🏠 Main Menu - Get started with Car Scout"),
-                BotCommand("find", "🎯 Find Cars - Search for your perfect car"),
-                BotCommand("account", "📊 My Account - View subscription & searches"),
-                BotCommand("pricing", "💰 Pricing - See subscription plans"),
-                BotCommand("help", "❓ Help - Learn how Car Scout works"),
-                BotCommand("settings", "⚙️ Settings - Manage notifications & preferences")
-            ]
-            
-            # Set the commands for the bot
-            await context.bot.set_my_commands(commands)
-            
-            # Set the menu button to show commands
-            menu_button = MenuButtonCommands()
-            await context.bot.set_chat_menu_button(menu_button=menu_button)
-            
-            logger.info("Menu button and commands set up successfully")
-            
-        except Exception as e:
-            logger.error(f"Failed to set up menu button: {e}")
+
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command with simple main menu"""
@@ -1031,9 +1005,41 @@ Set up smart alerts to get notified when cars matching your criteria are posted 
             reply_markup=reply_markup
         )
     
+    async def post_init(self, application):
+        """Set up menu button after bot starts"""
+        await self._setup_menu_button_direct()
+    
+    async def _setup_menu_button_direct(self):
+        """Set up the persistent menu button with bot commands"""
+        try:
+            # Define the commands that will appear in the menu
+            commands = [
+                BotCommand("start", "🏠 Main Menu - Get started with Car Scout"),
+                BotCommand("find", "🎯 Find Cars - Search for your perfect car"),
+                BotCommand("account", "📊 My Account - View subscription & searches"),
+                BotCommand("pricing", "💰 Pricing - See subscription plans"),
+                BotCommand("help", "❓ Help - Learn how Car Scout works"),
+                BotCommand("settings", "⚙️ Settings - Manage notifications & preferences")
+            ]
+            
+            # Set the commands for the bot
+            await self.application.bot.set_my_commands(commands)
+            
+            # Set the menu button to show commands
+            menu_button = MenuButtonCommands()
+            await self.application.bot.set_chat_menu_button(menu_button=menu_button)
+            
+            logger.info("Menu button and commands set up successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to set up menu button: {e}")
+    
     def run(self):
         """Start the bot"""
         logger.info("Starting Car Scout Bot...")
+        
+        # Set up menu button after initialization
+        self.application.post_init = self.post_init
         self.application.run_polling()
 
 if __name__ == "__main__":
