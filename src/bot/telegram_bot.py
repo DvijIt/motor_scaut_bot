@@ -123,7 +123,8 @@ Need help? Just send me a message! 💬
         keyboard = [
             [InlineKeyboardButton("🆓 Start Free Trial", callback_data="free_trial")],
             [InlineKeyboardButton("💳 Choose Plan", callback_data="choose_plan")],
-            [InlineKeyboardButton("❓ Learn More", callback_data="learn_more")]
+            [InlineKeyboardButton("❓ Learn More", callback_data="learn_more")],
+            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -165,7 +166,8 @@ What would you like to do?
         keyboard = [
             [InlineKeyboardButton("➕ Add Search", callback_data="add_search")],
             [InlineKeyboardButton("⚙️ Manage Alerts", callback_data="manage_alerts")],
-            [InlineKeyboardButton("⬆️ Upgrade Plan", callback_data="upgrade")]
+            [InlineKeyboardButton("⬆️ Upgrade Plan", callback_data="upgrade")],
+            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -193,7 +195,8 @@ What would you like to do?
         keyboard = [
             [InlineKeyboardButton("🔔 Notification Settings", callback_data="notifications")],
             [InlineKeyboardButton("🌍 Change Location", callback_data="location")],
-            [InlineKeyboardButton("💳 Billing Info", callback_data="billing")]
+            [InlineKeyboardButton("💳 Billing Info", callback_data="billing")],
+            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -227,6 +230,21 @@ What would you like to do?
             await self.manage_alerts(query)
         elif data == "upgrade":
             await self.show_plans(query)
+        elif data == "back_to_main":
+            await self.show_main_menu(query)
+        elif data == "back_to_subscribe":
+            await self.show_subscribe_menu(query)
+        elif data == "back_to_plans":
+            await self.show_plans(query)
+        elif data == "status":
+            await self.show_status_menu(query)
+        elif data == "trial_start":
+            await self.start_free_trial(query)
+        elif data.startswith("plan_"):
+            plan_type = data.replace("plan_", "")
+            await self.handle_plan_selection(query, plan_type)
+        elif data == "create_search":
+            await self.add_search_flow(query)
         else:
             await query.edit_message_text("Unknown action. Please try again.")
     
@@ -264,7 +282,8 @@ Which plan works best for you?
             [InlineKeyboardButton("🆓 Start Free Trial", callback_data="trial_start")],
             [InlineKeyboardButton("🥉 Basic €5", callback_data="plan_basic")],
             [InlineKeyboardButton("🥈 Pro €10", callback_data="plan_pro")],
-            [InlineKeyboardButton("🥇 Premium €15", callback_data="plan_premium")]
+            [InlineKeyboardButton("🥇 Premium €15", callback_data="plan_premium")],
+            [InlineKeyboardButton("🔙 Back", callback_data="back_to_subscribe")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -290,7 +309,8 @@ Let's create your first search now!
         """
         
         keyboard = [
-            [InlineKeyboardButton("🎯 Create First Search", callback_data="create_search")]
+            [InlineKeyboardButton("🎯 Create First Search", callback_data="create_search")],
+            [InlineKeyboardButton("🔙 Back to Plans", callback_data="back_to_plans")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -331,7 +351,7 @@ Ready to start? 🚀
         
         keyboard = [
             [InlineKeyboardButton("🚀 Start Free Trial", callback_data="trial_start")],
-            [InlineKeyboardButton("🔙 Back to Plans", callback_data="plans")]
+            [InlineKeyboardButton("🔙 Back to Plans", callback_data="back_to_plans")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -397,6 +417,135 @@ Ready to start? 🚀
             
         except Exception as e:
             logger.error(f"Failed to send alert to user {user_id}: {e}")
+    
+    async def show_main_menu(self, query):
+        """Show main menu - equivalent to /start command"""
+        user = query.from_user
+        welcome_text = f"""
+🚗 Welcome back to Car Scout, {user.first_name}!
+
+I help you find great car deals on Kleinanzeigen.de by sending instant alerts when new listings match your criteria.
+
+🔥 **What I can do:**
+• Monitor Kleinanzeigen.de 24/7
+• Send instant notifications for new cars
+• Filter by price, brand, location, and more
+• Help you never miss a great deal again!
+
+💰 **Subscription Plans:**
+• Basic: €5/month - 3 search filters
+• Pro: €10/month - 10 search filters  
+• Premium: €15/month - Unlimited filters + priority alerts
+
+📱 **Quick Actions:**
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("🚀 Start Subscription", callback_data="subscribe")],
+            [InlineKeyboardButton("📋 View Plans", callback_data="plans")],
+            [InlineKeyboardButton("📊 My Status", callback_data="status")],
+            [InlineKeyboardButton("❓ Help", callback_data="help")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            welcome_text,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
+    
+    async def show_subscribe_menu(self, query):
+        """Show subscription menu"""
+        subscribe_text = """
+🎯 **Ready to start finding great car deals?**
+
+Choose how you'd like to begin:
+
+🆓 **Free Trial** - 7 days, 1 search filter
+💳 **Paid Plans** - Full access with multiple filters
+❓ **Learn More** - How the service works
+
+What would you like to do?
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("🆓 Start Free Trial", callback_data="free_trial")],
+            [InlineKeyboardButton("💳 Choose Plan", callback_data="choose_plan")],
+            [InlineKeyboardButton("❓ Learn More", callback_data="learn_more")],
+            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            subscribe_text,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
+    
+    async def show_status_menu(self, query):
+        """Show status menu like the /status command"""
+        status_text = """
+📊 **Your Car Scout Status:**
+
+🔄 **Subscription:** Free Trial (6 days remaining)
+🎯 **Active Alerts:** 1 of 1 allowed
+📱 **Notifications:** Enabled
+🔍 **Last Check:** 5 minutes ago
+
+**Your Active Searches:**
+🚗 BMW 3 Series, €10,000-25,000, Munich area
+   └ Last match: 2 hours ago
+
+💡 Upgrade to Pro for more search filters!
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("➕ Add Search", callback_data="add_search")],
+            [InlineKeyboardButton("⚙️ Manage Alerts", callback_data="manage_alerts")],
+            [InlineKeyboardButton("⬆️ Upgrade Plan", callback_data="upgrade")],
+            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            status_text,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
+    
+    async def handle_plan_selection(self, query, plan_type):
+        """Handle specific plan selection"""
+        plan_info = {
+            "basic": {"name": "Basic", "price": "€5", "features": "3 search filters"},
+            "pro": {"name": "Pro", "price": "€10", "features": "10 search filters + priority alerts"},
+            "premium": {"name": "Premium", "price": "€15", "features": "Unlimited filters + premium support"}
+        }
+        
+        plan = plan_info.get(plan_type, plan_info["basic"])
+        
+        text = f"""
+✅ **{plan['name']} Plan Selected!**
+
+💰 **Price:** {plan['price']}/month
+🎯 **Features:** {plan['features']}
+
+🚧 **Payment integration coming soon!**
+
+For now, you can start with our free trial and we'll notify you when payment is ready.
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("🆓 Start Free Trial Instead", callback_data="trial_start")],
+            [InlineKeyboardButton("🔙 Back to Plans", callback_data="back_to_plans")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="back_to_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
     
     def run(self):
         """Start the bot"""
