@@ -1,0 +1,33 @@
+# Docker Compose for Car Scout
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: car-scout-bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DATABASE_URL=postgresql://user:password@db:5432/carscout
+      - PRODUCTION=true
+    depends_on:
+      - db
+    volumes:
+      - ./logs:/app/logs
+
+  db:
+    image: postgres:15-alpine
+    container_name: car-scout-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=carscout
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres_data:
