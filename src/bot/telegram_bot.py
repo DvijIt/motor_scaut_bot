@@ -5,7 +5,7 @@ Handles user interactions, subscriptions, and alert sending
 
 import logging
 import os
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ForceReply, MenuButtonCommands, BotCommand
 from telegram.ext import (
     Application, 
     ApplicationBuilder, 
@@ -35,6 +35,9 @@ class CarScoutBot:
         
         self.application = ApplicationBuilder().token(self.token).build()
         self._setup_handlers()
+        
+        # Set up menu button and commands on startup
+        self.application.job_queue.run_once(self._setup_menu_button, 1)
     
     def _setup_handlers(self):
         """Set up all bot command and message handlers"""
@@ -45,6 +48,11 @@ class CarScoutBot:
         self.application.add_handler(CommandHandler("status", self.status_command))
         self.application.add_handler(CommandHandler("settings", self.settings_command))
         
+        # New menu command handlers
+        self.application.add_handler(CommandHandler("find", self.find_command))
+        self.application.add_handler(CommandHandler("account", self.account_command))
+        self.application.add_handler(CommandHandler("pricing", self.pricing_command))
+        
         # Callback query handler for inline buttons
         self.application.add_handler(CallbackQueryHandler(self.button_callback))
         
@@ -52,6 +60,31 @@ class CarScoutBot:
         self.application.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message)
         )
+    
+    async def _setup_menu_button(self, context):
+        """Set up the persistent menu button with bot commands"""
+        try:
+            # Define the commands that will appear in the menu
+            commands = [
+                BotCommand("start", "🏠 Main Menu - Get started with Car Scout"),
+                BotCommand("find", "🎯 Find Cars - Search for your perfect car"),
+                BotCommand("account", "📊 My Account - View subscription & searches"),
+                BotCommand("pricing", "💰 Pricing - See subscription plans"),
+                BotCommand("help", "❓ Help - Learn how Car Scout works"),
+                BotCommand("settings", "⚙️ Settings - Manage notifications & preferences")
+            ]
+            
+            # Set the commands for the bot
+            await context.bot.set_my_commands(commands)
+            
+            # Set the menu button to show commands
+            menu_button = MenuButtonCommands()
+            await context.bot.set_chat_menu_button(menu_button=menu_button)
+            
+            logger.info("Menu button and commands set up successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to set up menu button: {e}")
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command with simple main menu"""
@@ -88,29 +121,47 @@ Find your perfect car deal on Kleinanzeigen.de with instant alerts! 🎯
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command"""
         help_text = """
-🤖 **Car Scout Bot Commands:**
+🤖 **Car Scout Bot Help**
 
-/start - Welcome message and getting started
-/help - Show this help message
-/subscribe - Set up new car search alerts
-/status - Check your subscription and active alerts
-/settings - Manage your account settings
+**📱 Easy Navigation:**
+• Tap the **Menu** button next to the message field
+• Use the quick commands from the menu
+• Or use buttons in any message
 
-📋 **How to use:**
-1. Use /subscribe to create your first search
-2. Set your filters (brand, price, location)
-3. Get instant notifications when new cars match!
+**🎯 Main Commands:**
+/start - 🏠 Main Menu
+/find - 🎯 Find Cars
+/account - 📊 My Account  
+/pricing - 💰 View Plans
+/help - ❓ This help message
+/settings - ⚙️ Bot settings
 
-💡 **Tips:**
-• Be specific with your search criteria
-• Use location filters to find cars near you
-• Set realistic price ranges for better results
-• You can pause/resume alerts anytime
+**📋 How Car Scout Works:**
+1. **Set Your Criteria** - Tell me what car you want
+2. **We Monitor 24/7** - Check Kleinanzeigen.de constantly  
+3. **Get Instant Alerts** - Telegram notifications when matches found
+4. **Be First to Contact** - Beat other buyers to great deals!
 
-Need help? Just send me a message! 💬
+**💡 Pro Tips:**
+• Use specific search criteria for better results
+• Set realistic price ranges  
+• Try different locations and radius
+• Enable notifications for fastest alerts
+
+**Need help?** Just send me a message! 💬
         """
         
-        await update.message.reply_html(help_text)
+        keyboard = [
+            [InlineKeyboardButton("🎯 Create First Search", callback_data="create_search")],
+            [InlineKeyboardButton("❓ How it Works", callback_data="how_it_works")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="back_to_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_html(
+            help_text,
+            reply_markup=reply_markup
+        )
     
     async def subscribe_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /subscribe command"""
@@ -887,6 +938,97 @@ Here's how a typical search looks:
             text,
             reply_markup=reply_markup,
             parse_mode='HTML'
+        )
+    
+    async def find_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /find command - equivalent to 'Find Cars' button"""
+        user = update.effective_user
+        text = """
+🎯 **Find Your Perfect Car**
+
+Set up smart alerts to get notified when cars matching your criteria are posted on Kleinanzeigen.de!
+
+**What do you want to do?**
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("➕ Create New Search", callback_data="create_search")],
+            [InlineKeyboardButton("📋 My Active Searches", callback_data="my_searches")],
+            [InlineKeyboardButton("🔍 Browse Recent Cars", callback_data="browse_cars")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="back_to_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_html(
+            text,
+            reply_markup=reply_markup
+        )
+    
+    async def account_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /account command - equivalent to 'My Account' button"""
+        user = update.effective_user
+        text = """
+📊 **My Account**
+
+**Current Status:**
+🔄 Subscription: Free Trial (6 days left)
+🎯 Active Searches: 1 of 1 allowed
+📱 Notifications: Enabled
+
+**Account Actions:**
+        """
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("📈 Upgrade Plan", callback_data="pricing"),
+                InlineKeyboardButton("⚙️ Settings", callback_data="account_settings")
+            ],
+            [
+                InlineKeyboardButton("📋 View My Searches", callback_data="my_searches"),
+                InlineKeyboardButton("📊 Usage Stats", callback_data="usage_stats")
+            ],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="back_to_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_html(
+            text,
+            reply_markup=reply_markup
+        )
+    
+    async def pricing_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /pricing command - equivalent to 'Pricing' button"""
+        user = update.effective_user
+        text = """
+💰 **Car Scout Pricing**
+
+**🆓 Free Trial**
+• 7 days free access
+• 1 search alert
+• Basic notifications
+
+**💳 Premium Plans**
+• **Basic €5/month** - 3 searches
+• **Pro €10/month** - 10 searches ⭐
+• **Premium €15/month** - Unlimited
+
+**What would you like to do?**
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("🆓 Start Free Trial", callback_data="start_free_trial")],
+            [
+                InlineKeyboardButton("🥉 Basic €5", callback_data="plan_basic"),
+                InlineKeyboardButton("🥈 Pro €10", callback_data="plan_pro")
+            ],
+            [InlineKeyboardButton("🥇 Premium €15", callback_data="plan_premium")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="back_to_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_html(
+            text,
+            reply_markup=reply_markup
         )
     
     def run(self):
