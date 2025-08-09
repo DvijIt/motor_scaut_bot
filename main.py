@@ -6,8 +6,8 @@ Coordinates the bot, scraper, and alert system
 import os
 import asyncio
 import logging
-import schedule
-import time
+# import schedule
+# import time
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
@@ -172,17 +172,17 @@ class CarScoutApp:
         except Exception as e:
             logger.error(f"Failed to send alert to user {user.telegram_id}: {e}")
     
-    def run_scheduled_tasks(self):
-        """Run scheduled tasks in a separate thread"""
-        schedule.every(10).minutes.do(self.schedule_alert_processing)
-        
-        while True:
-            schedule.run_pending()
-            time.sleep(60)  # Check every minute
-    
-    def schedule_alert_processing(self):
-        """Schedule alert processing to run in async context"""
-        asyncio.create_task(self.process_search_alerts())
+    # def run_scheduled_tasks(self):
+    #     """Run scheduled tasks in a separate thread"""
+    #     schedule.every(10).minutes.do(self.schedule_alert_processing)
+    #     
+    #     while True:
+    #         schedule.run_pending()
+    #         time.sleep(60)  # Check every minute
+    # 
+    # def schedule_alert_processing(self):
+    #     """Schedule alert processing to run in async context"""
+    #     asyncio.create_task(self.process_search_alerts())
     
     async def start_bot(self):
         """Start the Telegram bot"""
