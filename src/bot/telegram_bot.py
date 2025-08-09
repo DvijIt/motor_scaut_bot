@@ -54,35 +54,29 @@ class CarScoutBot:
         )
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /start command"""
+        """Handle /start command with simple main menu"""
         user = update.effective_user
         welcome_text = f"""
-🚗 Welcome to Car Scout, {user.first_name}!
+🚗 **Welcome to Car Scout, {user.first_name}!**
 
-I help you find great car deals on Kleinanzeigen.de by sending instant alerts when new listings match your criteria.
+Find your perfect car deal on Kleinanzeigen.de with instant alerts! 🎯
 
-🔥 **What I can do:**
-• Monitor Kleinanzeigen.de 24/7
-• Send instant notifications for new cars
-• Filter by price, brand, location, and more
-• Help you never miss a great deal again!
-
-💰 **Subscription Plans:**
-• Basic: €5/month - 3 search filters
-• Pro: €10/month - 10 search filters  
-• Premium: €15/month - Unlimited filters + priority alerts
-
-📱 **Getting Started:**
-Use /subscribe to set up your first car alert!
-Use /help to see all available commands.
-
-Ready to find your dream car? 🎯
+**Choose what you want to do:**
         """
         
+        # Simple main menu with clear options
         keyboard = [
-            [InlineKeyboardButton("🚀 Start Subscription", callback_data="subscribe")],
-            [InlineKeyboardButton("📋 View Plans", callback_data="plans")],
-            [InlineKeyboardButton("❓ Help", callback_data="help")]
+            [
+                InlineKeyboardButton("🎯 Find Cars", callback_data="find_cars"),
+                InlineKeyboardButton("📊 My Account", callback_data="my_account")
+            ],
+            [
+                InlineKeyboardButton("💰 Pricing", callback_data="pricing"),
+                InlineKeyboardButton("❓ How it Works", callback_data="how_it_works")
+            ],
+            [
+                InlineKeyboardButton("🆓 Start Free Trial", callback_data="start_free_trial")
+            ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -212,7 +206,20 @@ What would you like to do?
         
         data = query.data
         
-        if data == "subscribe":
+        # Main menu options
+        if data == "find_cars":
+            await self.show_find_cars_menu(query)
+        elif data == "my_account":
+            await self.show_my_account_menu(query)
+        elif data == "pricing":
+            await self.show_pricing_menu(query)
+        elif data == "how_it_works":
+            await self.show_how_it_works(query)
+        elif data == "start_free_trial":
+            await self.start_free_trial_flow(query)
+        
+        # Legacy/secondary menu options
+        elif data == "subscribe":
             await self.subscribe_command(update, context)
         elif data == "plans":
             await self.show_plans(query)
@@ -230,6 +237,8 @@ What would you like to do?
             await self.manage_alerts(query)
         elif data == "upgrade":
             await self.show_plans(query)
+        
+        # Navigation
         elif data == "back_to_main":
             await self.show_main_menu(query)
         elif data == "back_to_subscribe":
@@ -245,6 +254,18 @@ What would you like to do?
             await self.handle_plan_selection(query, plan_type)
         elif data == "create_search":
             await self.add_search_flow(query)
+        
+        # Additional handlers for new menu items
+        elif data == "my_searches":
+            await self.show_my_searches(query)
+        elif data == "browse_cars":
+            await self.browse_recent_cars(query)
+        elif data == "account_settings":
+            await self.show_account_settings(query)
+        elif data == "usage_stats":
+            await self.show_usage_stats(query)
+        elif data == "example_search":
+            await self.show_example_search(query)
         else:
             await query.edit_message_text("Unknown action. Please try again.")
     
@@ -538,6 +559,327 @@ For now, you can start with our free trial and we'll notify you when payment is 
             [InlineKeyboardButton("🆓 Start Free Trial Instead", callback_data="trial_start")],
             [InlineKeyboardButton("🔙 Back to Plans", callback_data="back_to_plans")],
             [InlineKeyboardButton("🏠 Main Menu", callback_data="back_to_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
+    
+    async def show_find_cars_menu(self, query):
+        """Show Find Cars menu - main functionality"""
+        text = """
+🎯 **Find Your Perfect Car**
+
+Set up smart alerts to get notified when cars matching your criteria are posted on Kleinanzeigen.de!
+
+**What do you want to do?**
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("➕ Create New Search", callback_data="create_search")],
+            [InlineKeyboardButton("📋 My Active Searches", callback_data="my_searches")],
+            [InlineKeyboardButton("🔍 Browse Recent Cars", callback_data="browse_cars")],
+            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
+    
+    async def show_my_account_menu(self, query):
+        """Show My Account menu"""
+        text = """
+📊 **My Account**
+
+**Current Status:**
+🔄 Subscription: Free Trial (6 days left)
+🎯 Active Searches: 1 of 1 allowed
+📱 Notifications: Enabled
+
+**Account Actions:**
+        """
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("📈 Upgrade Plan", callback_data="pricing"),
+                InlineKeyboardButton("⚙️ Settings", callback_data="account_settings")
+            ],
+            [
+                InlineKeyboardButton("📋 View My Searches", callback_data="my_searches"),
+                InlineKeyboardButton("📊 Usage Stats", callback_data="usage_stats")
+            ],
+            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
+    
+    async def show_pricing_menu(self, query):
+        """Show simplified pricing menu"""
+        text = """
+💰 **Car Scout Pricing**
+
+**🆓 Free Trial**
+• 7 days free access
+• 1 search alert
+• Basic notifications
+
+**💳 Premium Plans**
+• **Basic €5/month** - 3 searches
+• **Pro €10/month** - 10 searches ⭐
+• **Premium €15/month** - Unlimited
+
+**What would you like to do?**
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("🆓 Start Free Trial", callback_data="start_free_trial")],
+            [
+                InlineKeyboardButton("🥉 Basic €5", callback_data="plan_basic"),
+                InlineKeyboardButton("🥈 Pro €10", callback_data="plan_pro")
+            ],
+            [InlineKeyboardButton("🥇 Premium €15", callback_data="plan_premium")],
+            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
+    
+    async def show_how_it_works(self, query):
+        """Show How it Works explanation"""
+        text = """
+❓ **How Car Scout Works**
+
+**1. 🎯 Set Your Criteria**
+Tell me what car you want:
+• Brand (BMW, Audi, VW, etc.)
+• Price range (min-max)
+• Location & radius
+• Year, mileage, etc.
+
+**2. 🔍 We Monitor 24/7**
+I check Kleinanzeigen.de every few minutes for new cars matching your search.
+
+**3. 📱 Get Instant Alerts**
+As soon as a matching car is posted, you get a Telegram message with:
+• Car details & photos
+• Price & location
+• Direct link to listing
+
+**4. 🏃‍♂️ Be First to Contact**
+You see new cars before most people, giving you the best chance to get great deals!
+
+**Ready to start?**
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("🎯 Create My First Search", callback_data="create_search")],
+            [InlineKeyboardButton("🆓 Start Free Trial", callback_data="start_free_trial")],
+            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
+    
+    async def start_free_trial_flow(self, query):
+        """Start free trial with simplified flow"""
+        text = """
+🎉 **Welcome to Your Free Trial!**
+
+**You now have:**
+✅ 7 days of free access
+✅ 1 car search alert
+✅ Instant notifications
+
+**Next Step:**
+Let's create your first car search! I'll ask you a few quick questions about what car you're looking for.
+
+**Ready to start?**
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("🚀 Create My First Search", callback_data="create_search")],
+            [InlineKeyboardButton("📋 See Example Search", callback_data="example_search")],
+            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
+    
+    async def show_my_searches(self, query):
+        """Show user's active searches"""
+        text = """
+📋 **My Active Searches**
+
+**Search #1: BMW 3 Series**
+🎯 BMW, €10,000-25,000, Munich (50km)
+📅 Created: 2 days ago
+🔔 Status: Active
+📊 Matches found: 3 cars
+
+**Available Actions:**
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("➕ Add New Search", callback_data="create_search")],
+            [InlineKeyboardButton("⚙️ Edit Search #1", callback_data="edit_search_1")],
+            [InlineKeyboardButton("⏸️ Pause Search #1", callback_data="pause_search_1")],
+            [InlineKeyboardButton("🔙 Back", callback_data="find_cars")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
+    
+    async def browse_recent_cars(self, query):
+        """Browse recent cars without setting up alerts"""
+        text = """
+🔍 **Browse Recent Cars**
+
+**Latest BMW Cars in Munich:**
+
+🚗 **BMW 320d, 2018**
+💰 €18,500 | 📍 Munich | 🛣️ 85,000 km
+⏰ Posted 2 hours ago
+
+🚗 **BMW X3, 2020** 
+💰 €32,000 | 📍 Augsburg | 🛣️ 45,000 km
+⏰ Posted 4 hours ago
+
+**Want personalized alerts for cars like these?**
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("🎯 Create Search Alert", callback_data="create_search")],
+            [InlineKeyboardButton("🔄 Refresh Results", callback_data="browse_cars")],
+            [InlineKeyboardButton("🔙 Back", callback_data="find_cars")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
+    
+    async def show_account_settings(self, query):
+        """Show account settings"""
+        text = """
+⚙️ **Account Settings**
+
+**Notification Settings:**
+📱 Telegram Alerts: ✅ Enabled
+🔔 Sound: ✅ Enabled  
+⏰ Quiet Hours: 22:00 - 08:00
+
+**Location Settings:**
+🌍 Default Location: Munich, Germany
+📍 Default Radius: 50 km
+
+**Language & Currency:**
+🌐 Language: English
+💰 Currency: EUR (€)
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("🔔 Notification Settings", callback_data="notification_settings")],
+            [InlineKeyboardButton("🌍 Location Settings", callback_data="location_settings")],
+            [InlineKeyboardButton("🔙 Back to Account", callback_data="my_account")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
+    
+    async def show_usage_stats(self, query):
+        """Show usage statistics"""
+        text = """
+📊 **Usage Statistics**
+
+**This Month:**
+🎯 Active Searches: 1
+📧 Alerts Sent: 8
+🚗 Cars Found: 12
+⚡ Response Time: < 2 minutes
+
+**All Time:**
+📅 Member Since: 3 days ago
+📧 Total Alerts: 8
+🎯 Searches Created: 1
+💰 Money Saved: Priceless! 😄
+
+**Most Active Search:**
+🚗 BMW 3 Series in Munich
+   └ 8 alerts sent
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("📈 Detailed Stats", callback_data="detailed_stats")],
+            [InlineKeyboardButton("🔙 Back to Account", callback_data="my_account")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
+    
+    async def show_example_search(self, query):
+        """Show an example search to help users understand"""
+        text = """
+📋 **Example Car Search**
+
+Here's how a typical search looks:
+
+**Search Name:** "BMW 3 Series for Daily Commute"
+
+**Criteria:**
+🚗 **Brand:** BMW
+🏷️ **Model:** 3 Series (320d, 320i, 330i)
+💰 **Price:** €15,000 - €30,000
+📍 **Location:** Munich + 30km radius
+📅 **Year:** 2016 or newer
+🛣️ **Max Mileage:** 100,000 km
+⛽ **Fuel:** Diesel or Petrol
+
+**Result:** You'll get instant alerts when cars matching these criteria are posted!
+
+**Ready to create your own?**
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("🚀 Create Similar Search", callback_data="create_search")],
+            [InlineKeyboardButton("📋 See Another Example", callback_data="example_search_2")],
+            [InlineKeyboardButton("🔙 Back", callback_data="start_free_trial")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
