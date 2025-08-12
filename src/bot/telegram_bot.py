@@ -5,15 +5,24 @@ Handles user interactions, subscriptions, and alert sending
 
 import logging
 import os
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ForceReply, MenuButtonCommands, BotCommand
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import List, Dict, Any, Optional
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    BotCommand,
+    MenuButtonCommands,
+)
 from telegram.ext import (
-    Application, 
-    ApplicationBuilder, 
-    CommandHandler, 
-    MessageHandler, 
+    Application,
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
     CallbackQueryHandler,
     ContextTypes,
-    filters
+    filters,
 )
 from dotenv import load_dotenv
 
@@ -22,79 +31,71 @@ load_dotenv()
 
 # Configure logging
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-class CarScoutBot:
-    def __init__(self):
-        self.token = os.getenv('TELEGRAM_BOT_TOKEN')
-        if not self.token:
-            raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required")
-        
-        self.application = ApplicationBuilder().token(self.token).build()
-        self._setup_handlers()
-    
-    def _setup_handlers(self):
-        """Set up all bot command and message handlers"""
-        # Command handlers
-        self.application.add_handler(CommandHandler("start", self.start_command))
-        self.application.add_handler(CommandHandler("help", self.help_command))
-        self.application.add_handler(CommandHandler("subscribe", self.subscribe_command))
-        self.application.add_handler(CommandHandler("status", self.status_command))
-        self.application.add_handler(CommandHandler("settings", self.settings_command))
-        
-        # New menu command handlers
-        self.application.add_handler(CommandHandler("find", self.find_command))
-        self.application.add_handler(CommandHandler("account", self.account_command))
-        self.application.add_handler(CommandHandler("pricing", self.pricing_command))
-        
-        # Callback query handler for inline buttons
-        self.application.add_handler(CallbackQueryHandler(self.button_callback))
-        
-        # Message handler for text messages
-        self.application.add_handler(
-            MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message)
-        )
-    
 
-    
-    async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /start command with simple main menu"""
-        user = update.effective_user
-        welcome_text = f"""
-🚗 **Welcome to Car Scout, {user.first_name}!**
+@dataclass
+class MenuItem:
+    """Represents a menu item with text and callback data"""
+
+    text: str
+    callback_data: str
+    icon: str = ""
+
+
+@dataclass
+class MenuSection:
+    """Represents a section of menu items"""
+
+    items: List[MenuItem]
+    title: str = ""
+
+
+class MenuBuilder:
+    """Responsible for building menu keyboards"""
+
+    @staticmethod
+    def create_keyboard(
+        items: List[MenuItem], back_data: Optional[str] = None
+    ) -> InlineKeyboardMarkup:
+        """Create a keyboard with menu items and optional back button"""
+        keyboard = []
+
+        # Add menu items
+        for item in items:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        f"{item.icon} {item.text}", callback_data=item.callback_data
+                    )
+                ]
+            )
+
+        # Add back button if specified
+        if back_data:
+            keyboard.append([InlineKeyboardButton("⬅️ Back", callback_data=back_data)])
+
+        return InlineKeyboardMarkup(keyboard)
+
+
+class MenuContent:
+    """Contains all menu content and text"""
+
+    @staticmethod
+    def get_welcome_text(user_name: str) -> str:
+        return f"""
+🚗 **Welcome to Car Scout, {user_name}!**
 
 Find your perfect car deal on Kleinanzeigen.de with instant alerts! 🎯
 
 **Choose what you want to do:**
         """
-        
-        # Simple main menu with clear options
-        keyboard = [
-            [
-                InlineKeyboardButton("🎯 Find Cars", callback_data="find_cars"),
-                InlineKeyboardButton("📊 My Account", callback_data="my_account")
-            ],
-            [
-                InlineKeyboardButton("💰 Pricing", callback_data="pricing"),
-                InlineKeyboardButton("❓ How it Works", callback_data="how_it_works")
-            ],
-            [
-                InlineKeyboardButton("🆓 Start Free Trial", callback_data="start_free_trial")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_html(
-            welcome_text,
-            reply_markup=reply_markup
-        )
-    
-    async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /help command"""
-        help_text = """
+
+    @staticmethod
+    def get_help_text() -> str:
+        return """
 🤖 **Car Scout Bot Help**
 
 **📱 Easy Navigation:**
@@ -124,179 +125,10 @@ Find your perfect car deal on Kleinanzeigen.de with instant alerts! 🎯
 
 **Need help?** Just send me a message! 💬
         """
-        
-        keyboard = [
-            [InlineKeyboardButton("🎯 Create First Search", callback_data="create_search")],
-            [InlineKeyboardButton("❓ How it Works", callback_data="how_it_works")],
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="back_to_main")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_html(
-            help_text,
-            reply_markup=reply_markup
-        )
-    
-    async def subscribe_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /subscribe command"""
-        keyboard = [
-            [InlineKeyboardButton("🆓 Start Free Trial", callback_data="free_trial")],
-            [InlineKeyboardButton("💳 Choose Plan", callback_data="choose_plan")],
-            [InlineKeyboardButton("❓ Learn More", callback_data="learn_more")],
-            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        subscribe_text = """
-🎯 **Ready to start finding great car deals?**
 
-Choose how you'd like to begin:
-
-🆓 **Free Trial** - 7 days, 1 search filter
-💳 **Paid Plans** - Full access with multiple filters
-❓ **Learn More** - How the service works
-
-What would you like to do?
-        """
-        
-        await update.message.reply_html(
-            subscribe_text,
-            reply_markup=reply_markup
-        )
-    
-    async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /status command - show user's subscription status"""
-        # TODO: Implement database lookup for user status
-        status_text = """
-📊 **Your Car Scout Status:**
-
-🔄 **Subscription:** Free Trial (6 days remaining)
-🎯 **Active Alerts:** 1 of 1 allowed
-📱 **Notifications:** Enabled
-🔍 **Last Check:** 5 minutes ago
-
-**Your Active Searches:**
-🚗 BMW 3 Series, €10,000-25,000, Munich area
-   └ Last match: 2 hours ago
-
-💡 Upgrade to Pro for more search filters!
-        """
-        
-        keyboard = [
-            [InlineKeyboardButton("➕ Add Search", callback_data="add_search")],
-            [InlineKeyboardButton("⚙️ Manage Alerts", callback_data="manage_alerts")],
-            [InlineKeyboardButton("⬆️ Upgrade Plan", callback_data="upgrade")],
-            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_html(
-            status_text,
-            reply_markup=reply_markup
-        )
-    
-    async def settings_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /settings command"""
-        settings_text = """
-⚙️ **Car Scout Settings:**
-
-📱 **Notifications:** Enabled
-🔔 **Alert Frequency:** Instant
-🌍 **Default Location:** Munich, Germany
-💰 **Price Format:** EUR (€)
-⏰ **Quiet Hours:** 22:00 - 08:00
-
-**Subscription:**
-💳 Plan: Free Trial
-📅 Expires: December 23, 2024
-        """
-        
-        keyboard = [
-            [InlineKeyboardButton("🔔 Notification Settings", callback_data="notifications")],
-            [InlineKeyboardButton("🌍 Change Location", callback_data="location")],
-            [InlineKeyboardButton("💳 Billing Info", callback_data="billing")],
-            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_html(
-            settings_text,
-            reply_markup=reply_markup
-        )
-    
-    async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle inline button callbacks"""
-        query = update.callback_query
-        await query.answer()
-        
-        data = query.data
-        
-        # Main menu options
-        if data == "find_cars":
-            await self.show_find_cars_menu(query)
-        elif data == "my_account":
-            await self.show_my_account_menu(query)
-        elif data == "pricing":
-            await self.show_pricing_menu(query)
-        elif data == "how_it_works":
-            await self.show_how_it_works(query)
-        elif data == "start_free_trial":
-            await self.start_free_trial_flow(query)
-        
-        # Legacy/secondary menu options
-        elif data == "subscribe":
-            await self.subscribe_command(update, context)
-        elif data == "plans":
-            await self.show_plans(query)
-        elif data == "help":
-            await self.help_command(update, context)
-        elif data == "free_trial":
-            await self.start_free_trial(query)
-        elif data == "choose_plan":
-            await self.show_plans(query)
-        elif data == "learn_more":
-            await self.show_learn_more(query)
-        elif data == "add_search":
-            await self.add_search_flow(query)
-        elif data == "manage_alerts":
-            await self.manage_alerts(query)
-        elif data == "upgrade":
-            await self.show_plans(query)
-        
-        # Navigation
-        elif data == "back_to_main":
-            await self.show_main_menu(query)
-        elif data == "back_to_subscribe":
-            await self.show_subscribe_menu(query)
-        elif data == "back_to_plans":
-            await self.show_plans(query)
-        elif data == "status":
-            await self.show_status_menu(query)
-        elif data == "trial_start":
-            await self.start_free_trial(query)
-        elif data.startswith("plan_"):
-            plan_type = data.replace("plan_", "")
-            await self.handle_plan_selection(query, plan_type)
-        elif data == "create_search":
-            await self.add_search_flow(query)
-        
-        # Additional handlers for new menu items
-        elif data == "my_searches":
-            await self.show_my_searches(query)
-        elif data == "browse_cars":
-            await self.browse_recent_cars(query)
-        elif data == "account_settings":
-            await self.show_account_settings(query)
-        elif data == "usage_stats":
-            await self.show_usage_stats(query)
-        elif data == "example_search":
-            await self.show_example_search(query)
-        else:
-            await query.edit_message_text("Unknown action. Please try again.")
-    
-    async def show_plans(self, query):
-        """Show subscription plans"""
-        plans_text = """
+    @staticmethod
+    def get_pricing_text() -> str:
+        return """
 💰 **Car Scout Subscription Plans:**
 
 🆓 **Free Trial** - €0
@@ -323,303 +155,20 @@ What would you like to do?
 
 Which plan works best for you?
         """
-        
-        keyboard = [
-            [InlineKeyboardButton("🆓 Start Free Trial", callback_data="trial_start")],
-            [InlineKeyboardButton("🥉 Basic €5", callback_data="plan_basic")],
-            [InlineKeyboardButton("🥈 Pro €10", callback_data="plan_pro")],
-            [InlineKeyboardButton("🥇 Premium €15", callback_data="plan_premium")],
-            [InlineKeyboardButton("🔙 Back", callback_data="back_to_subscribe")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            plans_text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
-        )
-    
-    async def start_free_trial(self, query):
-        """Start free trial process"""
-        trial_text = """
-🎉 **Welcome to your Free Trial!**
 
-You now have 7 days of free access to Car Scout!
-
-🚀 **Next Steps:**
-1. Set up your first car search
-2. Choose your filters (brand, price, location)
-3. Start receiving instant alerts!
-
-Let's create your first search now!
-        """
-        
-        keyboard = [
-            [InlineKeyboardButton("🎯 Create First Search", callback_data="create_search")],
-            [InlineKeyboardButton("🔙 Back to Plans", callback_data="back_to_plans")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            trial_text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
-        )
-    
-    async def show_learn_more(self, query):
-        """Show detailed information about the service"""
-        learn_text = """
-🎓 **How Car Scout Works:**
-
-**1. Set Your Search Criteria** 🎯
-• Choose car brand (BMW, Audi, VW, etc.)
-• Set price range (min-max)
-• Select location radius
-• Add specific model or features
-
-**2. We Monitor 24/7** 👁️
-• Check Kleinanzeigen.de every few minutes
-• Find new listings that match your criteria
-• Filter out duplicates and irrelevant posts
-
-**3. Get Instant Alerts** 📱
-• Receive Telegram notifications immediately
-• See photos, price, and direct link
-• Be the first to contact sellers
-
-**4. Find Great Deals** 💰
-• Never miss price drops
-• Spot rare models quickly
-• Get notifications faster than email alerts
-
-Ready to start? 🚀
-        """
-        
-        keyboard = [
-            [InlineKeyboardButton("🚀 Start Free Trial", callback_data="trial_start")],
-            [InlineKeyboardButton("🔙 Back to Plans", callback_data="back_to_plans")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            learn_text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
-        )
-    
-    async def add_search_flow(self, query):
-        """Start the flow to add a new search"""
-        await query.edit_message_text(
-            "🎯 **Create New Car Search**\n\n"
-            "I'll help you set up a new car alert. "
-            "Please send me the car brand you're looking for (e.g., BMW, Audi, Volkswagen):",
-            parse_mode='HTML'
-        )
-        # TODO: Implement conversation state management
-    
-    async def manage_alerts(self, query):
-        """Manage existing alerts"""
-        # TODO: Implement alert management
-        await query.edit_message_text(
-            "⚙️ **Manage Your Alerts**\n\n"
-            "Alert management coming soon! "
-            "For now, use /status to see your active searches.",
-            parse_mode='HTML'
-        )
-    
-    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle regular text messages"""
-        # TODO: Implement conversation flow handling
-        response = (
-            "Thanks for your message! 👋\n\n"
-            "Use /help to see available commands or /subscribe to get started with car alerts!"
-        )
-        await update.message.reply_text(response)
-    
-    async def send_car_alert(self, user_id: int, car_listing: dict):
-        """Send a car alert to a specific user"""
-        try:
-            alert_text = f"""
-🚗 **New Car Alert!**
-
-**{car_listing['title']}**
-💰 Price: €{car_listing['price']:,}
-📍 Location: {car_listing['location']}
-📅 Posted: {car_listing['date']}
-
-{car_listing['description'][:200]}...
-
-🔗 [View on Kleinanzeigen.de]({car_listing['url']})
-            """
-            
-            await self.application.bot.send_message(
-                chat_id=user_id,
-                text=alert_text,
-                parse_mode='Markdown',
-                disable_web_page_preview=False
-            )
-            
-            logger.info(f"Car alert sent to user {user_id}")
-            
-        except Exception as e:
-            logger.error(f"Failed to send alert to user {user_id}: {e}")
-    
-    async def show_main_menu(self, query):
-        """Show main menu - equivalent to /start command"""
-        user = query.from_user
-        welcome_text = f"""
-🚗 Welcome back to Car Scout, {user.first_name}!
-
-I help you find great car deals on Kleinanzeigen.de by sending instant alerts when new listings match your criteria.
-
-🔥 **What I can do:**
-• Monitor Kleinanzeigen.de 24/7
-• Send instant notifications for new cars
-• Filter by price, brand, location, and more
-• Help you never miss a great deal again!
-
-💰 **Subscription Plans:**
-• Basic: €5/month - 3 search filters
-• Pro: €10/month - 10 search filters  
-• Premium: €15/month - Unlimited filters + priority alerts
-
-📱 **Quick Actions:**
-        """
-        
-        keyboard = [
-            [InlineKeyboardButton("🚀 Start Subscription", callback_data="subscribe")],
-            [InlineKeyboardButton("📋 View Plans", callback_data="plans")],
-            [InlineKeyboardButton("📊 My Status", callback_data="status")],
-            [InlineKeyboardButton("❓ Help", callback_data="help")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            welcome_text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
-        )
-    
-    async def show_subscribe_menu(self, query):
-        """Show subscription menu"""
-        subscribe_text = """
-🎯 **Ready to start finding great car deals?**
-
-Choose how you'd like to begin:
-
-🆓 **Free Trial** - 7 days, 1 search filter
-💳 **Paid Plans** - Full access with multiple filters
-❓ **Learn More** - How the service works
-
-What would you like to do?
-        """
-        
-        keyboard = [
-            [InlineKeyboardButton("🆓 Start Free Trial", callback_data="free_trial")],
-            [InlineKeyboardButton("💳 Choose Plan", callback_data="choose_plan")],
-            [InlineKeyboardButton("❓ Learn More", callback_data="learn_more")],
-            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            subscribe_text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
-        )
-    
-    async def show_status_menu(self, query):
-        """Show status menu like the /status command"""
-        status_text = """
-📊 **Your Car Scout Status:**
-
-🔄 **Subscription:** Free Trial (6 days remaining)
-🎯 **Active Alerts:** 1 of 1 allowed
-📱 **Notifications:** Enabled
-🔍 **Last Check:** 5 minutes ago
-
-**Your Active Searches:**
-🚗 BMW 3 Series, €10,000-25,000, Munich area
-   └ Last match: 2 hours ago
-
-💡 Upgrade to Pro for more search filters!
-        """
-        
-        keyboard = [
-            [InlineKeyboardButton("➕ Add Search", callback_data="add_search")],
-            [InlineKeyboardButton("⚙️ Manage Alerts", callback_data="manage_alerts")],
-            [InlineKeyboardButton("⬆️ Upgrade Plan", callback_data="upgrade")],
-            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            status_text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
-        )
-    
-    async def handle_plan_selection(self, query, plan_type):
-        """Handle specific plan selection"""
-        plan_info = {
-            "basic": {"name": "Basic", "price": "€5", "features": "3 search filters"},
-            "pro": {"name": "Pro", "price": "€10", "features": "10 search filters + priority alerts"},
-            "premium": {"name": "Premium", "price": "€15", "features": "Unlimited filters + premium support"}
-        }
-        
-        plan = plan_info.get(plan_type, plan_info["basic"])
-        
-        text = f"""
-✅ **{plan['name']} Plan Selected!**
-
-💰 **Price:** {plan['price']}/month
-🎯 **Features:** {plan['features']}
-
-🚧 **Payment integration coming soon!**
-
-For now, you can start with our free trial and we'll notify you when payment is ready.
-        """
-        
-        keyboard = [
-            [InlineKeyboardButton("🆓 Start Free Trial Instead", callback_data="trial_start")],
-            [InlineKeyboardButton("🔙 Back to Plans", callback_data="back_to_plans")],
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="back_to_main")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
-        )
-    
-    async def show_find_cars_menu(self, query):
-        """Show Find Cars menu - main functionality"""
-        text = """
+    @staticmethod
+    def get_find_cars_text() -> str:
+        return """
 🎯 **Find Your Perfect Car**
 
 Set up smart alerts to get notified when cars matching your criteria are posted on Kleinanzeigen.de!
 
 **What do you want to do?**
         """
-        
-        keyboard = [
-            [InlineKeyboardButton("➕ Create New Search", callback_data="create_search")],
-            [InlineKeyboardButton("📋 My Active Searches", callback_data="my_searches")],
-            [InlineKeyboardButton("🔍 Browse Recent Cars", callback_data="browse_cars")],
-            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
-        )
-    
-    async def show_my_account_menu(self, query):
-        """Show My Account menu"""
-        text = """
+
+    @staticmethod
+    def get_account_text() -> str:
+        return """
 📊 **My Account**
 
 **Current Status:**
@@ -629,64 +178,10 @@ Set up smart alerts to get notified when cars matching your criteria are posted 
 
 **Account Actions:**
         """
-        
-        keyboard = [
-            [
-                InlineKeyboardButton("📈 Upgrade Plan", callback_data="pricing"),
-                InlineKeyboardButton("⚙️ Settings", callback_data="account_settings")
-            ],
-            [
-                InlineKeyboardButton("📋 View My Searches", callback_data="my_searches"),
-                InlineKeyboardButton("📊 Usage Stats", callback_data="usage_stats")
-            ],
-            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
-        )
-    
-    async def show_pricing_menu(self, query):
-        """Show simplified pricing menu"""
-        text = """
-💰 **Car Scout Pricing**
 
-**🆓 Free Trial**
-• 7 days free access
-• 1 search alert
-• Basic notifications
-
-**💳 Premium Plans**
-• **Basic €5/month** - 3 searches
-• **Pro €10/month** - 10 searches ⭐
-• **Premium €15/month** - Unlimited
-
-**What would you like to do?**
-        """
-        
-        keyboard = [
-            [InlineKeyboardButton("🆓 Start Free Trial", callback_data="start_free_trial")],
-            [
-                InlineKeyboardButton("🥉 Basic €5", callback_data="plan_basic"),
-                InlineKeyboardButton("🥈 Pro €10", callback_data="plan_pro")
-            ],
-            [InlineKeyboardButton("🥇 Premium €15", callback_data="plan_premium")],
-            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
-        )
-    
-    async def show_how_it_works(self, query):
-        """Show How it Works explanation"""
-        text = """
+    @staticmethod
+    def get_how_it_works_text() -> str:
+        return """
 ❓ **How Car Scout Works**
 
 **1. 🎯 Set Your Criteria**
@@ -710,23 +205,10 @@ You see new cars before most people, giving you the best chance to get great dea
 
 **Ready to start?**
         """
-        
-        keyboard = [
-            [InlineKeyboardButton("🎯 Create My First Search", callback_data="create_search")],
-            [InlineKeyboardButton("🆓 Start Free Trial", callback_data="start_free_trial")],
-            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
-        )
-    
-    async def start_free_trial_flow(self, query):
-        """Start free trial with simplified flow"""
-        text = """
+
+    @staticmethod
+    def get_free_trial_text() -> str:
+        return """
 🎉 **Welcome to Your Free Trial!**
 
 **You now have:**
@@ -739,22 +221,302 @@ Let's create your first car search! I'll ask you a few quick questions about wha
 
 **Ready to start?**
         """
-        
+
+    @staticmethod
+    def get_status_text() -> str:
+        return """
+📊 **Your Car Scout Status:**
+
+🔄 **Subscription:** Free Trial (6 days remaining)
+🎯 **Active Alerts:** 1 of 1 allowed
+📱 **Notifications:** Enabled
+🔍 **Last Check:** 5 minutes ago
+
+**Your Active Searches:**
+🚗 BMW 3 Series, €10,000-25,000, Munich area
+   └ Last match: 2 hours ago
+
+💡 Upgrade to Pro for more search filters!
+        """
+
+    @staticmethod
+    def get_settings_text() -> str:
+        return """
+⚙️ **Car Scout Settings:**
+
+📱 **Notifications:** Enabled
+🔔 **Alert Frequency:** Instant
+🌍 **Default Location:** Munich, Germany
+💰 **Price Format:** EUR (€)
+⏰ **Quiet Hours:** 22:00 - 08:00
+
+**Subscription:**
+💳 Plan: Free Trial
+📅 Expires: December 23, 2024
+        """
+
+
+class MenuStructure:
+    """Defines the structure of all menus"""
+
+    @staticmethod
+    def get_main_menu() -> List[MenuItem]:
+        return [
+            MenuItem("Find Cars", "find_cars", "🎯"),
+            MenuItem("My Account", "my_account", "📊"),
+            MenuItem("Pricing", "pricing", "💰"),
+            MenuItem("How it Works", "how_it_works", "❓"),
+            MenuItem("Start Free Trial", "start_free_trial", "🆓"),
+        ]
+
+    @staticmethod
+    def get_find_cars_menu() -> List[MenuItem]:
+        return [
+            MenuItem("Create New Search", "create_search", "➕"),
+            MenuItem("My Active Searches", "my_searches", "📋"),
+            MenuItem("Browse Recent Cars", "browse_cars", "🔍"),
+        ]
+
+    @staticmethod
+    def get_account_menu() -> List[MenuItem]:
+        return [
+            MenuItem("Upgrade Plan", "pricing", "📈"),
+            MenuItem("Settings", "account_settings", "⚙️"),
+            MenuItem("View My Searches", "my_searches", "📋"),
+            MenuItem("Usage Stats", "usage_stats", "📊"),
+        ]
+
+    @staticmethod
+    def get_pricing_menu() -> List[MenuItem]:
+        return [
+            MenuItem("Start Free Trial", "start_free_trial", "🆓"),
+            MenuItem("Basic €5", "plan_basic", "🥉"),
+            MenuItem("Pro €10", "plan_pro", "🥈"),
+            MenuItem("Premium €15", "plan_premium", "🥇"),
+        ]
+
+    @staticmethod
+    def get_how_it_works_menu() -> List[MenuItem]:
+        return []
+
+    @staticmethod
+    def get_help_menu() -> List[MenuItem]:
+        return [
+            MenuItem("Create First Search", "create_search", "🎯"),
+            MenuItem("How it Works", "how_it_works", "❓"),
+        ]
+
+    @staticmethod
+    def get_free_trial_menu() -> List[MenuItem]:
+        return [
+            MenuItem("Create My First Search", "create_search", "🚀"),
+            MenuItem("See Example Search", "example_search", "📋"),
+        ]
+
+    @staticmethod
+    def get_status_menu() -> List[MenuItem]:
+        return [
+            MenuItem("Add Search", "add_search", "➕"),
+            MenuItem("Manage Alerts", "manage_alerts", "⚙️"),
+            MenuItem("Upgrade Plan", "upgrade", "⬆️"),
+        ]
+
+    @staticmethod
+    def get_settings_menu() -> List[MenuItem]:
+        return [
+            MenuItem("Notification Settings", "notifications", "🔔"),
+            MenuItem("Change Location", "location", "🌍"),
+            MenuItem("Billing Info", "billing", "💳"),
+        ]
+
+
+class MenuHandler(ABC):
+    """Abstract base class for menu handlers"""
+
+    def __init__(self, bot: "CarScoutBot"):
+        self.bot = bot
+
+    @abstractmethod
+    async def handle(self, query, **kwargs) -> None:
+        """Handle the menu action"""
+        pass
+
+
+class MainMenuHandler(MenuHandler):
+    """Handles main menu display"""
+
+    async def handle(self, query, **kwargs) -> None:
+        user = query.from_user if hasattr(query, "from_user") else query.effective_user
+        welcome_text = MenuContent.get_welcome_text(user.first_name)
+        keyboard = MenuBuilder.create_keyboard(MenuStructure.get_main_menu())
+
+        if hasattr(query, "edit_message_text"):
+            await query.edit_message_text(
+                welcome_text, reply_markup=keyboard, parse_mode="HTML"
+            )
+        else:
+            await query.message.reply_html(welcome_text, reply_markup=keyboard)
+
+
+class FindCarsMenuHandler(MenuHandler):
+    """Handles find cars menu"""
+
+    async def handle(self, query, **kwargs) -> None:
+        text = MenuContent.get_find_cars_text()
+        keyboard = MenuBuilder.create_keyboard(
+            MenuStructure.get_find_cars_menu(), back_data="back_to_main"
+        )
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+
+
+class AccountMenuHandler(MenuHandler):
+    """Handles account menu"""
+
+    async def handle(self, query, **kwargs) -> None:
+        text = MenuContent.get_account_text()
+        keyboard = MenuBuilder.create_keyboard(
+            MenuStructure.get_account_menu(), back_data="back_to_main"
+        )
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+
+
+class PricingMenuHandler(MenuHandler):
+    """Handles pricing menu"""
+
+    async def handle(self, query, **kwargs) -> None:
+        text = MenuContent.get_pricing_text()
+        keyboard = MenuBuilder.create_keyboard(
+            MenuStructure.get_pricing_menu(), back_data="back_to_main"
+        )
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+
+
+class HowItWorksHandler(MenuHandler):
+    """Handles how it works menu"""
+
+    async def handle(self, query, **kwargs) -> None:
+        text = MenuContent.get_how_it_works_text()
+        keyboard = MenuBuilder.create_keyboard(
+            MenuStructure.get_how_it_works_menu(), back_data="back_to_main"
+        )
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+
+
+class HelpMenuHandler(MenuHandler):
+    """Handles help menu"""
+
+    async def handle(self, query, **kwargs) -> None:
+        text = MenuContent.get_help_text()
+        keyboard = MenuBuilder.create_keyboard(
+            MenuStructure.get_help_menu(), back_data="back_to_main"
+        )
+
+        if hasattr(query, "edit_message_text"):
+            await query.edit_message_text(
+                text, reply_markup=keyboard, parse_mode="HTML"
+            )
+        else:
+            await query.message.reply_html(text, reply_markup=keyboard)
+
+
+class FreeTrialHandler(MenuHandler):
+    """Handles free trial flow"""
+
+    async def handle(self, query, **kwargs) -> None:
+        text = MenuContent.get_free_trial_text()
+        keyboard = MenuBuilder.create_keyboard(
+            MenuStructure.get_free_trial_menu(), back_data="back_to_main"
+        )
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+
+
+class StatusMenuHandler(MenuHandler):
+    """Handles status menu"""
+
+    async def handle(self, query, **kwargs) -> None:
+        text = MenuContent.get_status_text()
+        keyboard = MenuBuilder.create_keyboard(
+            MenuStructure.get_status_menu(), back_data="back_to_main"
+        )
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+
+
+class SettingsMenuHandler(MenuHandler):
+    """Handles settings menu"""
+
+    async def handle(self, query, **kwargs) -> None:
+        text = MenuContent.get_settings_text()
+        keyboard = MenuBuilder.create_keyboard(
+            MenuStructure.get_settings_menu(), back_data="back_to_main"
+        )
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+
+
+class PlanSelectionHandler(MenuHandler):
+    """Handles plan selection"""
+
+    async def handle(self, query, plan_type: str, **kwargs) -> None:
+        plan_info = {
+            "basic": {"name": "Basic", "price": "€5", "features": "3 search filters"},
+            "pro": {
+                "name": "Pro",
+                "price": "€10",
+                "features": "10 search filters + priority alerts",
+            },
+            "premium": {
+                "name": "Premium",
+                "price": "€15",
+                "features": "Unlimited filters + premium support",
+            },
+        }
+
+        plan = plan_info.get(plan_type, plan_info["basic"])
+
+        text = f"""
+✅ **{plan['name']} Plan Selected!**
+
+💰 **Price:** {plan['price']}/month
+🎯 **Features:** {plan['features']}
+
+🚧 **Payment integration coming soon!**
+
+For now, you can start with our free trial and we'll notify you when payment is ready.
+        """
+
         keyboard = [
-            [InlineKeyboardButton("🚀 Create My First Search", callback_data="create_search")],
-            [InlineKeyboardButton("📋 See Example Search", callback_data="example_search")],
-            [InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main")]
+            [
+                InlineKeyboardButton(
+                    "🆓 Start Free Trial Instead", callback_data="start_free_trial"
+                )
+            ],
+            [
+                InlineKeyboardButton("🔙 Back to Plans", callback_data="pricing"),
+                InlineKeyboardButton("🏠 Main Menu", callback_data="back_to_main"),
+            ],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
+
         await query.edit_message_text(
-            text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
+            text, reply_markup=reply_markup, parse_mode="HTML"
         )
-    
-    async def show_my_searches(self, query):
-        """Show user's active searches"""
+
+
+class SearchFlowHandler(MenuHandler):
+    """Handles search creation flow"""
+
+    async def handle(self, query, **kwargs) -> None:
+        await query.edit_message_text(
+            "🎯 **Create New Car Search**\n\n"
+            "I'll help you set up a new car alert. "
+            "Please send me the car brand you're looking for (e.g., BMW, Audi, Volkswagen):",
+            parse_mode="HTML",
+        )
+
+
+class MySearchesHandler(MenuHandler):
+    """Handles my searches display"""
+
+    async def handle(self, query, **kwargs) -> None:
         text = """
 📋 **My Active Searches**
 
@@ -766,23 +528,24 @@ Let's create your first car search! I'll ask you a few quick questions about wha
 
 **Available Actions:**
         """
-        
+
         keyboard = [
             [InlineKeyboardButton("➕ Add New Search", callback_data="create_search")],
             [InlineKeyboardButton("⚙️ Edit Search #1", callback_data="edit_search_1")],
             [InlineKeyboardButton("⏸️ Pause Search #1", callback_data="pause_search_1")],
-            [InlineKeyboardButton("🔙 Back", callback_data="find_cars")]
+            [InlineKeyboardButton("🔙 Back", callback_data="find_cars")],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
+
         await query.edit_message_text(
-            text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
+            text, reply_markup=reply_markup, parse_mode="HTML"
         )
-    
-    async def browse_recent_cars(self, query):
-        """Browse recent cars without setting up alerts"""
+
+
+class BrowseCarsHandler(MenuHandler):
+    """Handles browsing recent cars"""
+
+    async def handle(self, query, **kwargs) -> None:
         text = """
 🔍 **Browse Recent Cars**
 
@@ -798,22 +561,27 @@ Let's create your first car search! I'll ask you a few quick questions about wha
 
 **Want personalized alerts for cars like these?**
         """
-        
+
         keyboard = [
-            [InlineKeyboardButton("🎯 Create Search Alert", callback_data="create_search")],
+            [
+                InlineKeyboardButton(
+                    "🎯 Create Search Alert", callback_data="create_search"
+                )
+            ],
             [InlineKeyboardButton("🔄 Refresh Results", callback_data="browse_cars")],
-            [InlineKeyboardButton("🔙 Back", callback_data="find_cars")]
+            [InlineKeyboardButton("� Back", callback_data="find_cars")],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
+
         await query.edit_message_text(
-            text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
+            text, reply_markup=reply_markup, parse_mode="HTML"
         )
-    
-    async def show_account_settings(self, query):
-        """Show account settings"""
+
+
+class AccountSettingsHandler(MenuHandler):
+    """Handles account settings"""
+
+    async def handle(self, query, **kwargs) -> None:
         text = """
 ⚙️ **Account Settings**
 
@@ -830,22 +598,31 @@ Let's create your first car search! I'll ask you a few quick questions about wha
 🌐 Language: English
 💰 Currency: EUR (€)
         """
-        
+
         keyboard = [
-            [InlineKeyboardButton("🔔 Notification Settings", callback_data="notification_settings")],
-            [InlineKeyboardButton("🌍 Location Settings", callback_data="location_settings")],
-            [InlineKeyboardButton("🔙 Back to Account", callback_data="my_account")]
+            [
+                InlineKeyboardButton(
+                    "🔔 Notification Settings", callback_data="notification_settings"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🌍 Location Settings", callback_data="location_settings"
+                )
+            ],
+            [InlineKeyboardButton("� Back to Account", callback_data="my_account")],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
+
         await query.edit_message_text(
-            text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
+            text, reply_markup=reply_markup, parse_mode="HTML"
         )
-    
-    async def show_usage_stats(self, query):
-        """Show usage statistics"""
+
+
+class UsageStatsHandler(MenuHandler):
+    """Handles usage statistics display"""
+
+    async def handle(self, query, **kwargs) -> None:
         text = """
 📊 **Usage Statistics**
 
@@ -865,21 +642,22 @@ Let's create your first car search! I'll ask you a few quick questions about wha
 🚗 BMW 3 Series in Munich
    └ 8 alerts sent
         """
-        
+
         keyboard = [
             [InlineKeyboardButton("📈 Detailed Stats", callback_data="detailed_stats")],
-            [InlineKeyboardButton("🔙 Back to Account", callback_data="my_account")]
+            [InlineKeyboardButton("🔙 Back to Account", callback_data="my_account")],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
+
         await query.edit_message_text(
-            text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
+            text, reply_markup=reply_markup, parse_mode="HTML"
         )
-    
-    async def show_example_search(self, query):
-        """Show an example search to help users understand"""
+
+
+class ExampleSearchHandler(MenuHandler):
+    """Handles example search display"""
+
+    async def handle(self, query, **kwargs) -> None:
         text = """
 📋 **Example Car Search**
 
@@ -900,147 +678,219 @@ Here's how a typical search looks:
 
 **Ready to create your own?**
         """
-        
+
         keyboard = [
-            [InlineKeyboardButton("🚀 Create Similar Search", callback_data="create_search")],
-            [InlineKeyboardButton("📋 See Another Example", callback_data="example_search_2")],
-            [InlineKeyboardButton("🔙 Back", callback_data="start_free_trial")]
+            [
+                InlineKeyboardButton(
+                    "🚀 Create Similar Search", callback_data="create_search"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "📋 See Another Example", callback_data="example_search_2"
+                )
+            ],
+            [InlineKeyboardButton("� Back", callback_data="start_free_trial")],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
+
         await query.edit_message_text(
-            text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
+            text, reply_markup=reply_markup, parse_mode="HTML"
         )
-    
+
+
+class MenuHandlerFactory:
+    """Factory for creating menu handlers"""
+
+    def __init__(self, bot: "CarScoutBot"):
+        self.bot = bot
+        self._handlers = {
+            "main_menu": MainMenuHandler(bot),
+            "find_cars": FindCarsMenuHandler(bot),
+            "my_account": AccountMenuHandler(bot),
+            "pricing": PricingMenuHandler(bot),
+            "help": HelpMenuHandler(bot),
+            "start_free_trial": FreeTrialHandler(bot),
+            "status": StatusMenuHandler(bot),
+            "settings": SettingsMenuHandler(bot),
+            "create_search": SearchFlowHandler(bot),
+            "my_searches": MySearchesHandler(bot),
+            "browse_cars": BrowseCarsHandler(bot),
+            "account_settings": AccountSettingsHandler(bot),
+            "usage_stats": UsageStatsHandler(bot),
+            "example_search": ExampleSearchHandler(bot),
+            "how_it_works": HowItWorksHandler(bot),
+        }
+
+    def get_handler(self, action: str) -> Optional[MenuHandler]:
+        """Get handler for specific action"""
+        return self._handlers.get(action)
+
+    def get_plan_handler(self) -> PlanSelectionHandler:
+        """Get plan selection handler"""
+        return PlanSelectionHandler(self.bot)
+
+
+class CarScoutBot:
+    """Main bot class implementing SOLID principles"""
+
+    def __init__(self):
+        self.token = os.getenv("TELEGRAM_BOT_TOKEN")
+        if not self.token:
+            raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required")
+
+        self.application = ApplicationBuilder().token(self.token).build()
+        self.menu_factory = MenuHandlerFactory(self)
+        self._setup_handlers()
+
+    def _setup_handlers(self):
+        """Set up all bot command and message handlers"""
+        # Command handlers
+        self.application.add_handler(CommandHandler("start", self.start_command))
+        self.application.add_handler(CommandHandler("help", self.help_command))
+        self.application.add_handler(CommandHandler("find", self.find_command))
+        self.application.add_handler(CommandHandler("account", self.account_command))
+        self.application.add_handler(CommandHandler("pricing", self.pricing_command))
+        self.application.add_handler(CommandHandler("status", self.status_command))
+        self.application.add_handler(CommandHandler("settings", self.settings_command))
+
+        # Callback query handler for inline buttons
+        self.application.add_handler(CallbackQueryHandler(self.button_callback))
+
+        # Message handler for text messages
+        self.application.add_handler(
+            MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message)
+        )
+
+    async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /start command"""
+        await self.menu_factory.get_handler("main_menu").handle(update)
+
+    async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /help command"""
+        await self.menu_factory.get_handler("help").handle(update)
+
     async def find_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /find command - equivalent to 'Find Cars' button"""
-        user = update.effective_user
-        text = """
-🎯 **Find Your Perfect Car**
+        """Handle /find command"""
+        await self.menu_factory.get_handler("find_cars").handle(update)
 
-Set up smart alerts to get notified when cars matching your criteria are posted on Kleinanzeigen.de!
-
-**What do you want to do?**
-        """
-        
-        keyboard = [
-            [InlineKeyboardButton("➕ Create New Search", callback_data="create_search")],
-            [InlineKeyboardButton("📋 My Active Searches", callback_data="my_searches")],
-            [InlineKeyboardButton("🔍 Browse Recent Cars", callback_data="browse_cars")],
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="back_to_main")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_html(
-            text,
-            reply_markup=reply_markup
-        )
-    
     async def account_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /account command - equivalent to 'My Account' button"""
-        user = update.effective_user
-        text = """
-📊 **My Account**
+        """Handle /account command"""
+        await self.menu_factory.get_handler("my_account").handle(update)
 
-**Current Status:**
-🔄 Subscription: Free Trial (6 days left)
-🎯 Active Searches: 1 of 1 allowed
-📱 Notifications: Enabled
-
-**Account Actions:**
-        """
-        
-        keyboard = [
-            [
-                InlineKeyboardButton("📈 Upgrade Plan", callback_data="pricing"),
-                InlineKeyboardButton("⚙️ Settings", callback_data="account_settings")
-            ],
-            [
-                InlineKeyboardButton("📋 View My Searches", callback_data="my_searches"),
-                InlineKeyboardButton("📊 Usage Stats", callback_data="usage_stats")
-            ],
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="back_to_main")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_html(
-            text,
-            reply_markup=reply_markup
-        )
-    
     async def pricing_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /pricing command - equivalent to 'Pricing' button"""
-        user = update.effective_user
-        text = """
-💰 **Car Scout Pricing**
+        """Handle /pricing command"""
+        await self.menu_factory.get_handler("pricing").handle(update)
 
-**🆓 Free Trial**
-• 7 days free access
-• 1 search alert
-• Basic notifications
+    async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /status command"""
+        await self.menu_factory.get_handler("status").handle(update)
 
-**💳 Premium Plans**
-• **Basic €5/month** - 3 searches
-• **Pro €10/month** - 10 searches ⭐
-• **Premium €15/month** - Unlimited
+    async def settings_command(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ):
+        """Handle /settings command"""
+        await self.menu_factory.get_handler("settings").handle(update)
 
-**What would you like to do?**
-        """
-        
-        keyboard = [
-            [InlineKeyboardButton("🆓 Start Free Trial", callback_data="start_free_trial")],
-            [
-                InlineKeyboardButton("🥉 Basic €5", callback_data="plan_basic"),
-                InlineKeyboardButton("🥈 Pro €10", callback_data="plan_pro")
-            ],
-            [InlineKeyboardButton("🥇 Premium €15", callback_data="plan_premium")],
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="back_to_main")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_html(
-            text,
-            reply_markup=reply_markup
+    async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle inline button callbacks with unified routing"""
+        query = update.callback_query
+        await query.answer()
+
+        data = query.data
+
+        # Handle navigation
+        if data == "back_to_main":
+            await self.menu_factory.get_handler("main_menu").handle(query)
+            return
+
+        # Handle plan selections
+        if data.startswith("plan_"):
+            plan_type = data.replace("plan_", "")
+            await self.menu_factory.get_plan_handler().handle(
+                query, plan_type=plan_type
+            )
+            return
+
+        # Handle other actions
+        handler = self.menu_factory.get_handler(data)
+        if handler:
+            await handler.handle(query)
+        else:
+            await query.edit_message_text("Unknown action. Please try again.")
+            await self.menu_factory.get_handler("main_menu").handle(query)
+
+    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle regular text messages"""
+        response = (
+            "Thanks for your message! 👋\n\n"
+            "Use /help to see available commands or /start to get started with car alerts!"
         )
-    
+        await update.message.reply_text(response)
+
+    async def send_car_alert(self, user_id: int, car_listing: dict):
+        """Send a car alert to a specific user"""
+        try:
+            alert_text = f"""
+🚗 **New Car Alert!**
+
+**{car_listing['title']}**
+💰 Price: €{car_listing['price']:,}
+📍 Location: {car_listing['location']}
+📅 Posted: {car_listing['date']}
+
+{car_listing['description'][:200]}...
+
+🔗 [View on Kleinanzeigen.de]({car_listing['url']})
+            """
+
+            await self.application.bot.send_message(
+                chat_id=user_id,
+                text=alert_text,
+                parse_mode="Markdown",
+                disable_web_page_preview=False,
+            )
+
+            logger.info(f"Car alert sent to user {user_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to send alert to user {user_id}: {e}")
+
     async def post_init(self, application):
         """Set up menu button after bot starts"""
         await self._setup_menu_button_direct()
-    
+
     async def _setup_menu_button_direct(self):
         """Set up the persistent menu button with bot commands"""
         try:
-            # Define the commands that will appear in the menu
             commands = [
                 BotCommand("start", "🏠 Main Menu - Get started with Car Scout"),
                 BotCommand("find", "🎯 Find Cars - Search for your perfect car"),
                 BotCommand("account", "📊 My Account - View subscription & searches"),
                 BotCommand("pricing", "💰 Pricing - See subscription plans"),
                 BotCommand("help", "❓ Help - Learn how Car Scout works"),
-                BotCommand("settings", "⚙️ Settings - Manage notifications & preferences")
+                BotCommand(
+                    "settings", "⚙️ Settings - Manage notifications & preferences"
+                ),
             ]
-            
-            # Set the commands for the bot
+
             await self.application.bot.set_my_commands(commands)
-            
-            # Set the menu button to show commands
+
             menu_button = MenuButtonCommands()
             await self.application.bot.set_chat_menu_button(menu_button=menu_button)
-            
+
             logger.info("Menu button and commands set up successfully")
-            
+
         except Exception as e:
             logger.error(f"Failed to set up menu button: {e}")
-    
+
     def run(self):
         """Start the bot"""
         logger.info("Starting Car Scout Bot...")
-        
-        # Set up menu button after initialization
+
         self.application.post_init = self.post_init
         self.application.run_polling()
+
 
 if __name__ == "__main__":
     bot = CarScoutBot()
